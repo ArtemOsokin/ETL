@@ -35,20 +35,47 @@ services:
       - web
     ports:
       - 80:80
-
     networks:
       - test_net
+
   es:
     image: docker.elastic.co/elasticsearch/elasticsearch:7.7.0
     ports:
       - 9200:9200
     environment:
       - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
     volumes:
       - es_data:/usr/share/elasticsearch/data
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
     networks:
       - test_net
 
+  redis:
+    restart: unless-stopped
+    ports:
+      - 6379:6379
+    image: redis:6.2.5
+    volumes:
+      - redis_data:/data
+    networks:
+      - test_net
+
+  etl:
+    restart: unless-stopped
+    build: ./postgres_to_es
+    env_file:
+      - movies_admin/.env
+    depends_on:
+      - es
+      - redis
+      - web
+    networks:
+      - test_net
 
 networks:
     test_net:
@@ -58,3 +85,4 @@ volumes:
   postgres_data:
   es_data:
   static:
+  redis_data:
