@@ -89,6 +89,7 @@ class ETL:
                 actors_names=alist,
                 writers_names=wlist
             )
+            self.storage.save_state(row['updated_at'])
             yield temp
 
     def get_es_bulk_query(self, rows: list):
@@ -127,7 +128,6 @@ class ETL:
             error_message = item['index'].get('error')
             if error_message:
                 logging.error(error_message)
-        print(self.storage.retrieve_state())
         pass
 
 
