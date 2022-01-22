@@ -44,13 +44,13 @@ def get_update_film_work_person_genre_by_idx(up_state: str):
     WHERE (gfw.genre_id IN (
         SELECT id
         FROM genre
-        WHERE updated_at > {up_state})) AND (pfw.person_id IN (
+        WHERE updated_at > '{up_state}')) AND (pfw.person_id IN (
         SELECT id
         FROM person
-        WHERE updated_at > {up_state})) AND (fw.id IN (
+        WHERE updated_at > '{up_state}')) AND (fw.id IN (
         SELECT id
         FROM film_work
-        WHERE updated_at > {up_state}))
+        WHERE updated_at > '{up_state}'))
     GROUP BY fw.id 
     ORDER BY fw.updated_at DESC;
     """

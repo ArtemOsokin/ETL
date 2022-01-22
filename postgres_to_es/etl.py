@@ -24,6 +24,9 @@ class ETL:
         self.storage = storage
         self.urls = config.ELASTIC_URL
 
+    @backoff.on_exception(backoff.expo,
+                          (requests.exceptions.ConnectionError,
+                           requests.exceptions.Timeout))
     def extract(self, state_tab: str):
         up = self.storage.retrieve_state()
         if not up:
@@ -31,7 +34,7 @@ class ETL:
         curr_i = self.conn.cursor()
         curr_all = self.conn.cursor()
         if state_tab == 'all_tables':
-            curr_i.execute(get_update_person_filmwork_idx(up))
+            curr_i.execute(get_update_film_work_person_genre_by_idx(up))
         if state_tab == 'filmwork':
             curr_i.execute(get_update_filmwork(up))
         if state_tab == 'genre':
@@ -134,7 +137,6 @@ def start(connect):
                     etl.load(etl.get_es_bulk_query(film_data_to_es))
                 logging.debug(f"Table {tab} check")
             time.sleep(config.delay)
-
     except psycopg2.DatabaseError as error:
         logging.error(f"Database error {error}")
     pass
