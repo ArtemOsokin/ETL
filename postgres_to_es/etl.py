@@ -1,6 +1,7 @@
 import json
 import logging
 import time
+from datetime import datetime
 from urllib.parse import urljoin
 
 import backoff
@@ -12,53 +13,40 @@ from redis import Redis
 
 import config
 from config_sql import *
-from state_storage import RedisStorage
+from state_storage import StateStorage
 
 logging.basicConfig(level=logging.DEBUG)
 
 
 class ETL:
-    def __init__(self, conn: _connection, storage: RedisStorage):
+    def __init__(self, conn: _connection, storage: StateStorage):
         self.conn = conn
         self.storage = storage
         self.urls = config.ELASTIC_URL
-        self.batch_size = 100
 
     def extract(self, state_tab: str):
         up = self.storage.retrieve_state()
         if not up:
-            up = 'make_date(1700, 01, 01)'
-        else:
-            up = 'make_date(' + up[0:4] + ',' + up[5:7] + ',' + up[8:10] + ')'
-        curr = self.conn.cursor()
-        if state_tab == 'genre':
-            curr.execute(get_update_genres(up))
-        if state_tab == 'person':
-            curr.execute(get_update_persons(up))
+            up = datetime.min.isoformat()
+        curr_i = self.conn.cursor()
+        curr_all = self.conn.cursor()
+        if state_tab == 'all_tables':
+            curr_i.execute(get_update_person_filmwork_idx(up))
         if state_tab == 'filmwork':
-            curr.execute(get_update_filmwork(up))
-        data = curr.fetchall()
-        idx_l = []
-        for row in data:
-            idx_l.append("'" + row['id'] + "'")
-        idx = ', '.join(idx_l)
-        if state_tab != 'filmwork':
-            if state_tab == 'genre':
-                curr.execute(get_update_genre_filmwork_idx(idx))
-            if state_tab == 'person':
-                curr.execute(get_update_person_filmwork_idx(idx))
-            data = curr.fetchall()
-            idx_l = []
-            for row in data:
-                idx_l.append("'" + row['id'] + "'")
-            idx = ', '.join(idx_l)
-        curr.execute(get_update_film_work_by_idx(idx))
-        while data:
-            data = curr.fetchmany(self.batch_size)
-            yield data
+            curr_i.execute(get_update_filmwork(up))
+        if state_tab == 'genre':
+            curr_i.execute(get_update_genre_filmwork_idx(up))
+        if state_tab == 'person':
+            curr_i.execute(get_update_person_filmwork_idx(up))
+        while True:
+            data = curr_i.fetchmany(config.batch_size)
             if not data:
-                curr.close()
+                curr_i.close()
+                curr_all.close()
                 break
+            idx = ', '.join("'{}'".format(row['id']) for row in data)
+            curr_all.execute(get_update_film_work_by_idx(idx))
+            yield curr_all.fetchall()
 
     def transform(self, data: list):
         for row in data:
@@ -131,23 +119,29 @@ class ETL:
         pass
 
 
+def start(connect):
+    try:
+        logging.debug("ETL GO")
+        redis_adapter = Redis(host=config.Redis_host)
+        storage = StateStorage(redis_adapter=redis_adapter)
+        etl = ETL(conn=connect, storage=storage)
+        while True:
+            for tab in config.tables:
+                for e in etl.extract(tab):
+                    film_data_to_es = []
+                    for t in etl.transform(e):
+                        film_data_to_es.append(t)
+                    etl.load(etl.get_es_bulk_query(film_data_to_es))
+                logging.debug(f"Table {tab} check")
+            time.sleep(config.delay)
+
+    except psycopg2.DatabaseError as error:
+        logging.error(f"Database error {error}")
+    pass
+
+
 if __name__ == "__main__":
     with psycopg2.connect(**config.dsl,
                           cursor_factory=RealDictCursor
                           ) as pg_conn:
-        try:
-            logging.debug(f"Database GO")
-            redis_adapter = Redis(host='redis')
-            storage = RedisStorage(redis_adapter=redis_adapter)
-            etl = ETL(conn=pg_conn, storage=storage)
-            while True:
-                for tab in config.tables:
-                    index_film_data = []
-                    for e in etl.extract(tab):
-                        for t in etl.transform(e):
-                            index_film_data.append(t)
-                    etl.load(etl.get_es_bulk_query(index_film_data))
-                time.sleep(1)
-
-        except psycopg2.DatabaseError as error:
-            logging.debug(f"Database error {error}")
+        start(pg_conn)

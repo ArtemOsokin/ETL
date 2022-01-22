@@ -19,7 +19,7 @@ class BaseStorage:
         pass
 
 
-class RedisStorage(BaseStorage):
+class StateStorage(BaseStorage):
 
     def __init__(self, redis_adapter: Redis):
         self.redis_adapter = redis_adapter

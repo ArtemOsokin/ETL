@@ -1,54 +1,60 @@
-def get_update_persons(up_state: str):
-    SQL = f"""
-    SELECT id, updated_at
-    FROM person
-    WHERE updated_at > {up_state}
-    ORDER BY updated_at DESC ; 
-    """
-    return SQL
-
-
-def get_update_genres(up_state: str):
-    SQL = f"""
-    SELECT id, updated_at
-    FROM genre
-    WHERE updated_at > {up_state}
-    ORDER BY updated_at DESC ; 
-    """
-    return SQL
-
-
 def get_update_filmwork(up_state: str):
     SQL = f"""
     SELECT id, updated_at
     FROM film_work
-    WHERE updated_at > {up_state}
+    WHERE updated_at > '{up_state}'
     ORDER BY updated_at DESC ; 
     """
     return SQL
 
-
-def get_update_person_filmwork_idx(idx_person: str):
+def get_update_person_filmwork_idx(up_state: str):
     SQL = f"""
     SELECT fw.id, fw.updated_at
     FROM film_work fw
     LEFT JOIN person_film_work pfw ON pfw.film_work_id = fw.id
-    WHERE pfw.person_id IN ({idx_person})
+    WHERE pfw.person_id IN (
+        SELECT id
+        FROM person
+        WHERE updated_at > '{up_state}'
+    )
     ORDER BY fw.updated_at DESC ;
     """
     return SQL
 
-
-def get_update_genre_filmwork_idx(idx_genre: str):
+def get_update_genre_filmwork_idx(up_state: str):
     SQL = f"""
     SELECT fw.id, fw.updated_at
     FROM film_work fw
     LEFT JOIN genre_film_work gfw ON gfw.film_work_id = fw.id
-    WHERE gfw.genre_id IN ({idx_genre})
+    WHERE gfw.genre_id IN (
+        SELECT id
+        FROM genre
+        WHERE updated_at > '{up_state}'
+    )
     ORDER BY fw.updated_at DESC;
     """
     return SQL
 
+def get_update_film_work_person_genre_by_idx(up_state: str):
+    SQL = f"""
+    SELECT fw.id
+    FROM film_work fw
+    LEFT JOIN genre_film_work gfw ON gfw.film_work_id = fw.id
+    LEFT JOIN person_film_work pfw ON pfw.film_work_id = fw.id
+    WHERE (gfw.genre_id IN (
+        SELECT id
+        FROM genre
+        WHERE updated_at > {up_state})) AND (pfw.person_id IN (
+        SELECT id
+        FROM person
+        WHERE updated_at > {up_state})) AND (fw.id IN (
+        SELECT id
+        FROM film_work
+        WHERE updated_at > {up_state}))
+    GROUP BY fw.id 
+    ORDER BY fw.updated_at DESC;
+    """
+    return SQL
 
 def get_update_film_work_by_idx(idx: str):
     SQL = f"""
@@ -70,6 +76,7 @@ def get_update_film_work_by_idx(idx: str):
     LEFT JOIN person_film_work AS pfw ON fw.id = pfw.film_work_id
     LEFT JOIN person AS p ON pfw.person_id = p.id
     WHERE fw.id IN ({idx})
-    GROUP BY fw_id;
+    GROUP BY fw_id
+    ORDER BY fw.updated_at DESC;
     """
     return SQL

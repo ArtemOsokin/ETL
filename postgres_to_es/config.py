@@ -2,14 +2,16 @@ import os
 import logging
 import uuid
 from dataclasses import dataclass
-from typing import List
 
 tables = ['genre',
           'person',
-          'filmwork']
+          'filmwork',
+          'all_tables']
 
-ELASTIC_URL = 'http://es:9200'
-
+ELASTIC_URL = os.environ.get('ES_URL')
+Redis_host = os.environ.get('REDIS_HOST')
+delay = 1
+batch_size = 100
 logger = logging.getLogger()
 
 dsl = {
@@ -23,12 +25,6 @@ dsl = {
 
 
 @dataclass
-class ESPerson:
-    id: str
-    full_name: str
-
-
-@dataclass
 class ESMovie:
     id: uuid
     title: str
@@ -39,8 +35,8 @@ class ESMovie:
     directors_names: list
     actors_names: list
     writers_names: list
-    directors: List[ESPerson]
-    actors: List[ESPerson]
-    writers: List[ESPerson]
+    directors: list
+    actors: list
+    writers: list
 
 
