@@ -2,6 +2,7 @@ import json
 import logging
 import time
 from datetime import datetime
+from dataclasses import asdict
 from urllib.parse import urljoin
 
 import backoff
@@ -12,7 +13,7 @@ from psycopg2.extras import RealDictCursor
 from redis import Redis
 
 import config
-from config_sql import *
+import config_sql
 from state_storage import StateStorage
 
 logging.basicConfig(level=logging.DEBUG)
@@ -22,7 +23,7 @@ class ETL:
     def __init__(self, conn: _connection, storage: StateStorage):
         self.conn = conn
         self.storage = storage
-        self.urls = config.ELASTIC_URL
+        self.urls = config.elastic_url
 
     @backoff.on_exception(backoff.expo,
                           (requests.exceptions.ConnectionError,
@@ -34,13 +35,13 @@ class ETL:
         curr_i = self.conn.cursor()
         curr_all = self.conn.cursor()
         if state_tab == 'all_tables':
-            curr_i.execute(get_update_film_work_person_genre_by_idx(up))
+            curr_i.execute(config_sql.get_update_film_work_person_genre(up))
         if state_tab == 'filmwork':
-            curr_i.execute(get_update_filmwork(up))
+            curr_i.execute(config_sql.get_update_filmwork(up))
         if state_tab == 'genre':
-            curr_i.execute(get_update_genre_filmwork_idx(up))
+            curr_i.execute(config_sql.get_update_genre_filmwork(up))
         if state_tab == 'person':
-            curr_i.execute(get_update_person_filmwork_idx(up))
+            curr_i.execute(config_sql.get_update_person_filmwork(up))
         while True:
             data = curr_i.fetchmany(config.batch_size)
             if not data:
@@ -48,7 +49,7 @@ class ETL:
                 curr_all.close()
                 break
             idx = ', '.join("'{}'".format(row['id']) for row in data)
-            curr_all.execute(get_update_film_work_by_idx(idx))
+            curr_all.execute(config_sql.get_update_film_work_by_idx(idx))
             yield curr_all.fetchall()
 
     def transform(self, data: list):
@@ -72,7 +73,7 @@ class ETL:
                 description=row['description'],
                 rating=row['rating'],
                 type=row['type'],
-                genre=glist,
+                genres=glist,
                 directors=row['directors'],
                 actors=row['actors'],
                 writers=row['writers'],
@@ -86,20 +87,12 @@ class ETL:
     def get_es_bulk_query(self, rows: list):
         prepared_query = []
         for row in rows:
-            temp_json = {}
-            temp_json['id'] = row.id
-            temp_json['title'] = row.title
-            temp_json['rating'] = row.rating
-            temp_json['type'] = row.type
-            temp_json['description'] = row.description
-            temp_json['directors_names'] = row.directors_names
-            temp_json['actors_names'] = row.actors_names
-            temp_json['writers_names'] = row.writers_names
-            temp_json['directors'] = row.directors
-            temp_json['actors'] = row.actors
-            temp_json['writers'] = row.writers
+            temp_json = asdict(row)
             prepared_query.extend([
-                json.dumps({'index': {'_index': 'movies', '_id': row.id}}),
+                json.dumps({'index': {
+                    '_index': 'movies',
+                    '_id': temp_json['id']
+                }}),
                 json.dumps(temp_json)
             ])
         return prepared_query
@@ -125,21 +118,20 @@ class ETL:
 def start(connect):
     try:
         logging.debug("ETL GO")
-        redis_adapter = Redis(host=config.Redis_host)
+        redis_adapter = Redis(host=config.redis_host)
         storage = StateStorage(redis_adapter=redis_adapter)
         etl = ETL(conn=connect, storage=storage)
         while True:
             for tab in config.tables:
-                for e in etl.extract(tab):
+                for extracted in etl.extract(tab):
                     film_data_to_es = []
-                    for t in etl.transform(e):
-                        film_data_to_es.append(t)
+                    for transformed in etl.transform(extracted):
+                        film_data_to_es.append(transformed)
                     etl.load(etl.get_es_bulk_query(film_data_to_es))
                 logging.debug(f"Table {tab} check")
             time.sleep(config.delay)
     except psycopg2.DatabaseError as error:
         logging.error(f"Database error {error}")
-    pass
 
 
 if __name__ == "__main__":

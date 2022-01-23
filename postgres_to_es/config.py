@@ -3,13 +3,15 @@ import logging
 import uuid
 from dataclasses import dataclass
 
-tables = ['genre',
-          'person',
-          'filmwork',
-          'all_tables']
+tables = [
+    'all_tables',
+    'genre',
+    'person',
+    'filmwork'
+]
 
-ELASTIC_URL = os.environ.get('ES_URL')
-Redis_host = os.environ.get('REDIS_HOST')
+elastic_url = os.environ.get('ES_URL')
+redis_host = os.environ.get('REDIS_HOST')
 delay = 1
 batch_size = 100
 logger = logging.getLogger()
@@ -31,12 +33,10 @@ class ESMovie:
     rating: float
     type: str
     description: str
-    genre: list
+    genres: list
     directors_names: list
     actors_names: list
     writers_names: list
     directors: list
     actors: list
     writers: list
-
-

@@ -20,6 +20,6 @@ COPY requirements.txt /etl/
 
 # install python dependencies
 RUN pip install --upgrade pip
-RUN pip install -r requirements.txt
+RUN pip install -r requirements.txt --no-cache-dir
 COPY . /etl/
 CMD ["python", "etl.py"]

@@ -7,7 +7,7 @@ def get_update_filmwork(up_state: str):
     """
     return SQL
 
-def get_update_person_filmwork_idx(up_state: str):
+def get_update_person_filmwork(up_state: str):
     SQL = f"""
     SELECT fw.id, fw.updated_at
     FROM film_work fw
@@ -21,7 +21,7 @@ def get_update_person_filmwork_idx(up_state: str):
     """
     return SQL
 
-def get_update_genre_filmwork_idx(up_state: str):
+def get_update_genre_filmwork(up_state: str):
     SQL = f"""
     SELECT fw.id, fw.updated_at
     FROM film_work fw
@@ -35,7 +35,7 @@ def get_update_genre_filmwork_idx(up_state: str):
     """
     return SQL
 
-def get_update_film_work_person_genre_by_idx(up_state: str):
+def get_update_film_work_person_genre(up_state: str):
     SQL = f"""
     SELECT fw.id
     FROM film_work fw
